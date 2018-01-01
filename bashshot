@@ -45,10 +45,12 @@ for time in $period; do
 			if zfs snapshot $fs@"$time"_"$date"; then
 				echo "A $time snapshot of $fs taken."
 				if [[ -n $remote ]]; then
-					if zfs send -i $(ssh $remote zfs list -t snapshot | grep $fs@ | tail -n 1 | awk {'print $1'}) $fs@"$time"_"$date" | ssh $remote zfs receive $fs; then
+					latest_remote_snapshot="luckeysstorage/$(ssh $remote -- sudo zfs list -t snapshot -r $fs | tail -n 1 | awk {'print $1'})"
+					latst_local_snapshot="$(zfs list -t snapshot -r luckeysstorage/$fs | tail -n 1 | awk {'print $1'})"
+					if zfs send -i $latest_remote_snapshot $latest_local_snapshot | ssh $remote -- sudo zfs receive $fs;
 						echo "Sucessfully sent $time snapshot of $fs to $remote."
 					else
-						echo "Failed to send $time snapshot of $fs to $remote as $USER."
+						echo "FAILED to send $time snapshot of $fs to $remote as $(whoami)."
 					fi
 				fi
 			else
