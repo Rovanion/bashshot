@@ -1,5 +1,8 @@
 #!/bin/bash -e
 
+set -e -u
+set -o pipefail
+
 # Check if the user is root
 if (( $(id -u) != 0 )); then
 	echo "Bashshot must be run as root."
@@ -13,6 +16,7 @@ cd "$(dirname $0)"
 . /usr/local/etc/bashshot.conf
 date=$(date '+%Y-%m-%d_%H:%M')
 logPath=/var/log/bashshot.log
+period=""
 
 # Decide which periods that is to be snapshoted
 if [[ $frequent == "yes" ]]; then
@@ -45,9 +49,12 @@ for time in $period; do
 			if zfs snapshot $fs@"$time"_"$date"; then
 				echo "A $time snapshot of $fs taken."
 				if [[ -n $remote ]]; then
-					latest_remote_snapshot="luckeysstorage/$(ssh $remote -- sudo zfs list -t snapshot -r $fs | tail -n 1 | awk {'print $1'})"
-					latst_local_snapshot="$(zfs list -t snapshot -r luckeysstorage/$fs | tail -n 1 | awk {'print $1'})"
-					if zfs send -i $latest_remote_snapshot $latest_local_snapshot | ssh $remote -- sudo zfs receive $fs;
+					# The everything about luckeysstorage is local customizations for the
+					# fact that the fs is named different things on the remote and local machine.
+					remote_fs=${fs#luckeysstorage/}
+					latest_remote_snapshot="luckeysstorage/$(ssh $remote -- sudo zfs list -t snapshot -r $remote_fs | tail -n 1 | awk {'print $1'})"
+					latest_local_snapshot="$(zfs list -t snapshot -r $fs | tail -n 1 | awk {'print $1'})"
+					if zfs send -i $latest_remote_snapshot $latest_local_snapshot | ssh $remote -- sudo zfs receive $remote_fs; then
 						echo "Sucessfully sent $time snapshot of $fs to $remote."
 					else
 						echo "FAILED to send $time snapshot of $fs to $remote as $(whoami)."
